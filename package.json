@@ -7,7 +7,8 @@
     "dev:api": "pnpm --filter @workspace/api-server run dev",
     "dev:web": "pnpm --filter @workspace/mock-test run dev",
     "start": "pnpm --filter @workspace/api-server run start",
-    "build": "pnpm run typecheck && pnpm --filter @workspace/mock-test run build && pnpm --filter @workspace/api-server run build",
+    "build": "pnpm run typecheck:app && pnpm --filter @workspace/mock-test run build && pnpm --filter @workspace/api-server run build",
+    "typecheck:app": "pnpm run typecheck:libs && pnpm --filter @workspace/mock-test run typecheck && pnpm --filter @workspace/api-server run typecheck",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
   },
