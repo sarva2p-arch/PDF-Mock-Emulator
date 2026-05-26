@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "UPCNET Mock Test"
+version = "1.0.0"
+id = "artifacts/mock-test"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19055
+
+[services.development]
+run = "pnpm --filter @workspace/mock-test run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mock-test", "run", "build" ]
+publicDir = "artifacts/mock-test/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19055"
+BASE_PATH = "/"
