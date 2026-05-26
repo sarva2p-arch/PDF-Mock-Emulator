@@ -3,7 +3,7 @@ services:
     name: pdf-mock-emulator
     runtime: node
     plan: free
-    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
+    buildCommand: pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start
     envVars:
       - key: NODE_ENV
