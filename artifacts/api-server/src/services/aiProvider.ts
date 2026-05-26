@@ -21,6 +21,12 @@ interface Provider {
   complete: (system: string, user: string, maxTokens: number) => Promise<string>;
 }
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function shouldRetryProviderError(message: string) {
+  return /429|500|502|503|504|rate limit|temporarily|high demand|unavailable/i.test(message);
+}
+
 const PROVIDERS: Provider[] = [
   {
     id: "custom-openai",
@@ -44,48 +50,25 @@ const PROVIDERS: Provider[] = [
     },
   },
   {
-    id: "groq",
-    name: "Groq - Llama 3.3 (Free)",
-    model: "llama-3.3-70b-versatile",
-    type: "free",
-    note: "Set GROQ_API_KEY - free account at console.groq.com, very fast",
-    available: () => !!process.env.GROQ_API_KEY,
-    complete: async (system, user, maxTokens) => {
-      const client = new OpenAI({
-        apiKey: process.env.GROQ_API_KEY,
-        baseURL: "https://api.groq.com/openai/v1",
-      });
-      const res = await client.chat.completions.create({
-        model: "llama-3.3-70b-versatile",
-        max_tokens: Math.min(maxTokens, 8000),
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        response_format: { type: "json_object" },
-      });
-      return res.choices[0]?.message?.content ?? "{}";
-    },
-  },
-  {
     id: "gemini",
-    name: "Google Gemini 1.5 Flash (Free)",
-    model: "gemini-1.5-flash",
+    name: "Google Gemini 2.5 Flash (Free)",
+    model: "gemini-2.5-flash",
     type: "free",
-    note: "Set GEMINI_API_KEY - free at aistudio.google.com/apikey",
+    note: "Set GEMINI_API_KEY - free at aistudio.google.com/apikey, best for long PDFs",
     available: () => !!process.env.GEMINI_API_KEY,
     complete: async (system, user, maxTokens) => {
       const key = process.env.GEMINI_API_KEY!;
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`;
+      const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
       const resp = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
         body: JSON.stringify({
           systemInstruction: { parts: [{ text: system }] },
           contents: [{ role: "user", parts: [{ text: user }] }],
           generationConfig: {
             responseMimeType: "application/json",
             maxOutputTokens: Math.min(maxTokens, 8192),
+            thinkingConfig: { thinkingBudget: 0 },
           },
         }),
       });
@@ -98,6 +81,30 @@ const PROVIDERS: Provider[] = [
       };
       const data = (await resp.json()) as GeminiResponse;
       return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
+    },
+  },
+  {
+    id: "groq",
+    name: "Groq - Llama 3.3 (Free)",
+    model: "llama-3.3-70b-versatile",
+    type: "free",
+    note: "Set GROQ_API_KEY - free account at console.groq.com, very fast for smaller PDFs",
+    available: () => !!process.env.GROQ_API_KEY,
+    complete: async (system, user, maxTokens) => {
+      const client = new OpenAI({
+        apiKey: process.env.GROQ_API_KEY,
+        baseURL: "https://api.groq.com/openai/v1",
+      });
+      const res = await client.chat.completions.create({
+        model: "llama-3.3-70b-versatile",
+        max_tokens: Math.min(maxTokens, 4096),
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        response_format: { type: "json_object" },
+      });
+      return res.choices[0]?.message?.content ?? "{}";
     },
   },
 ];
@@ -141,13 +148,27 @@ export async function aiComplete(
 
   const errors: string[] = [];
   for (const provider of available) {
-    try {
-      const content = await provider.complete(systemPrompt, userPrompt, maxTokens);
-      return { content, provider: provider.id, providerName: provider.name };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      errors.push(`[${provider.name}] ${msg}`);
+    const maxAttempts = provider.id === "gemini" ? 3 : 1;
+    let lastError = "";
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const content = await provider.complete(systemPrompt, userPrompt, maxTokens);
+        return { content, provider: provider.id, providerName: provider.name };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        lastError = msg;
+
+        if (attempt < maxAttempts && shouldRetryProviderError(msg)) {
+          await sleep(1000 * attempt);
+          continue;
+        }
+
+        break;
+      }
     }
+
+    errors.push(`[${provider.name}] ${lastError}`);
   }
 
   throw new Error(

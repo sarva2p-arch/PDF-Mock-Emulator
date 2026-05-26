@@ -16,7 +16,7 @@ router.get("/ai-status", (_req, res) => {
     setupInstructions: {
       OPENAI_API_KEY: "Your own OpenAI key from platform.openai.com - optional paid provider",
       GROQ_API_KEY: "Free key from console.groq.com - fast Llama 3.3 model",
-      GEMINI_API_KEY: "Free key from aistudio.google.com/apikey - Google Gemini Flash",
+      GEMINI_API_KEY: "Free key from aistudio.google.com/apikey - Google Gemini 2.5 Flash",
     },
   });
 });

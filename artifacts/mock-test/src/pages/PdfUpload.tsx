@@ -1,5 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import * as pdfjsLib from "pdfjs-dist";
+import { friendlyExtractionError } from "@/lib/extractionErrors";
+import { downloadSavedTest } from "@/lib/savedTests";
+import BetaBadge from "@/components/BetaBadge";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.mjs",
@@ -9,9 +12,11 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 export interface ExtractedQuestion {
   id: number;
   subject: string;
+  questionType?: "mcq" | "integer";
   question: string;
   options: string[];
   correctAnswer: number;
+  numericAnswer?: string;
 }
 
 export type PdfUploadMode = "questions-only" | "with-answers";
@@ -122,10 +127,10 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
 
       setQuestions(data.questions);
       setExamTitle(data.examTitle || "Mock Test");
-      setAnswersFound(data.answersFound ?? data.questions.filter((q) => q.correctAnswer !== -1).length);
+      setAnswersFound(data.answersFound ?? data.questions.filter((q) => q.correctAnswer !== -1 || q.numericAnswer).length);
       setStage("preview");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
+      setError(friendlyExtractionError(err instanceof Error ? err.message : "Something went wrong"));
       setStage("error");
     }
   }, [mode, isWithAnswers]);
@@ -150,35 +155,35 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
   const subjectColors: Record<string, string> = {
     "Nursing Aptitude": "bg-pink-100 text-pink-800 border-pink-300 dark:bg-pink-900/40 dark:text-pink-300 dark:border-pink-700",
     Biology: "bg-green-100 text-green-800 border-green-300 dark:bg-green-900/40 dark:text-green-300 dark:border-green-700",
-    Physics: "bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
+    Physics: "bg-zinc-100 text-zinc-900 border-zinc-300 dark:bg-zinc-950/40 dark:text-zinc-400 dark:border-zinc-700",
     Chemistry: "bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700",
     English: "bg-purple-100 text-purple-800 border-purple-300 dark:bg-purple-900/40 dark:text-purple-300 dark:border-purple-700",
     Mathematics: "bg-cyan-100 text-cyan-800 border-cyan-300 dark:bg-cyan-900/40 dark:text-cyan-300 dark:border-cyan-700",
-    "General Knowledge": "bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-900/40 dark:text-orange-300 dark:border-orange-700",
-    Other: "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600",
+    "General Knowledge": "bg-zinc-100 text-zinc-900 border-zinc-300 dark:bg-zinc-900/40 dark:text-zinc-300 dark:border-zinc-700",
+    Other: "bg-gray-100 text-gray-700 border-gray-300 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700",
   };
   const getSubjectColor = (subj: string) =>
-    subjectColors[subj] ?? "bg-gray-100 text-gray-700 border-gray-300 dark:bg-gray-700 dark:text-gray-300 dark:border-gray-600";
+    subjectColors[subj] ?? "bg-gray-100 text-gray-700 border-gray-300 dark:bg-zinc-900 dark:text-zinc-300 dark:border-zinc-700";
 
-  const headerBg = isWithAnswers ? "bg-violet-700" : "bg-blue-700";
-  const headerText = isWithAnswers ? "text-violet-200" : "text-blue-200";
+  const headerBg = isWithAnswers ? "bg-zinc-950" : "bg-zinc-950";
+  const headerText = isWithAnswers ? "text-zinc-300" : "text-zinc-300";
   const btnBg = isWithAnswers
-    ? "bg-violet-700 hover:bg-violet-800"
-    : "bg-blue-700 hover:bg-blue-800";
-  const accentBorder = isWithAnswers ? "border-violet-500" : "border-blue-500";
-  const accentHoverBorder = isWithAnswers ? "hover:border-violet-400" : "hover:border-blue-400";
-  const accentHoverBg = isWithAnswers ? "hover:bg-violet-50/40 dark:hover:bg-violet-900/20" : "hover:bg-blue-50/40 dark:hover:bg-blue-900/20";
-  const spinColor = isWithAnswers ? "border-violet-600" : "border-blue-600";
-  const spinBg = isWithAnswers ? "border-violet-100 dark:border-violet-900" : "border-blue-100 dark:border-blue-900";
-  const iconColor = isWithAnswers ? "text-violet-600 dark:text-violet-400" : "text-blue-600 dark:text-blue-400";
+    ? "bg-zinc-950 hover:bg-black"
+    : "bg-zinc-950 hover:bg-black";
+  const accentBorder = isWithAnswers ? "border-zinc-800" : "border-zinc-800";
+  const accentHoverBorder = isWithAnswers ? "hover:border-zinc-500" : "hover:border-zinc-500";
+  const accentHoverBg = isWithAnswers ? "hover:bg-zinc-50/40 dark:hover:bg-zinc-900/20" : "hover:bg-zinc-50/40 dark:hover:bg-zinc-950/20";
+  const spinColor = isWithAnswers ? "border-zinc-700" : "border-zinc-700";
+  const spinBg = isWithAnswers ? "border-zinc-200 dark:border-zinc-900" : "border-zinc-200 dark:border-zinc-900";
+  const iconColor = isWithAnswers ? "text-zinc-700 dark:text-zinc-300" : "text-zinc-700 dark:text-zinc-300";
   const tipBg = isWithAnswers
-    ? "bg-violet-50 dark:bg-violet-950 border-violet-100 dark:border-violet-800"
-    : "bg-blue-50 dark:bg-blue-950 border-blue-100 dark:border-blue-800";
-  const tipTitle = isWithAnswers ? "text-violet-800 dark:text-violet-300" : "text-blue-800 dark:text-blue-300";
-  const tipText = "text-gray-600 dark:text-gray-300";
+    ? "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800"
+    : "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800";
+  const tipTitle = isWithAnswers ? "text-zinc-900 dark:text-zinc-300" : "text-zinc-900 dark:text-zinc-400";
+  const tipText = "text-gray-600 dark:text-zinc-300";
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-slate-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-zinc-100 dark:bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-2xl">
         <div className={`${headerBg} text-white rounded-t-xl p-5 text-center shadow-lg relative`}>
           {onToggleDark && (
@@ -198,10 +203,13 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
               )}
             </button>
           )}
-          <div className={`${headerText} text-xs uppercase tracking-wider mb-1`}>Dhanusha Academy</div>
-          <h1 className="text-xl font-bold">
-            {isWithAnswers ? "Upload PDF with Answer Key" : "Upload Question Paper PDF"}
-          </h1>
+          <div className={`${headerText} text-xs uppercase tracking-wider mb-1`}>Sarva Build</div>
+          <div className="flex items-center justify-center gap-2">
+            <h1 className="text-xl font-bold">
+              {isWithAnswers ? "Upload PDF with Answer Key" : "Upload Question Paper PDF"}
+            </h1>
+            <BetaBadge />
+          </div>
           <p className={`${headerText} text-sm mt-1`}>
             {isWithAnswers
               ? "AI will extract questions and match the answer key for accurate results"
@@ -209,7 +217,7 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
           </p>
         </div>
 
-        <div className="bg-white dark:bg-gray-800 rounded-b-xl shadow-lg p-6 space-y-5">
+        <div className="bg-white dark:bg-zinc-950 rounded-b-xl shadow-lg p-6 space-y-5">
 
           {(stage === "idle" || stage === "error") && (
             <>
@@ -220,25 +228,25 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
                 onClick={() => fileInputRef.current?.click()}
                 className={`border-2 border-dashed rounded-xl p-10 text-center cursor-pointer transition-all ${
                   isDragging
-                    ? `${accentBorder} bg-blue-50 dark:bg-blue-900/20`
-                    : `border-gray-300 dark:border-gray-600 ${accentHoverBorder} ${accentHoverBg}`
+                    ? `${accentBorder} bg-zinc-50 dark:bg-zinc-950/20`
+                    : `border-gray-300 dark:border-zinc-700 ${accentHoverBorder} ${accentHoverBg}`
                 }`}
               >
                 <div className="flex flex-col items-center gap-3">
-                  <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isDragging ? "bg-blue-100 dark:bg-blue-900" : "bg-gray-100 dark:bg-gray-700"}`}>
+                  <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isDragging ? "bg-zinc-100 dark:bg-zinc-950" : "bg-gray-100 dark:bg-zinc-900"}`}>
                     {isWithAnswers ? (
                       <svg className={`w-7 h-7 ${isDragging ? iconColor : "text-gray-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                       </svg>
                     ) : (
-                      <svg className={`w-7 h-7 ${isDragging ? "text-blue-600 dark:text-blue-400" : "text-gray-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className={`w-7 h-7 ${isDragging ? "text-zinc-700 dark:text-zinc-300" : "text-gray-400"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                       </svg>
                     )}
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-700 dark:text-gray-200">Drag & drop your PDF here</p>
-                    <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">or click to browse — max 20MB</p>
+                    <p className="font-semibold text-gray-700 dark:text-zinc-200">Drag & drop your PDF here</p>
+                    <p className="text-sm text-gray-400 dark:text-zinc-500 mt-0.5">or click to browse — max 20MB</p>
                   </div>
                   <span className={`${btnBg} text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors`}>
                     Choose PDF File
@@ -255,7 +263,7 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
                   <div>
                     <p className="font-semibold text-red-700 dark:text-red-400 text-sm">Extraction Failed</p>
                     <p className="text-red-600 dark:text-red-400 text-sm mt-0.5">{error}</p>
-                    <p className="text-red-500 dark:text-red-500 text-xs mt-1">Please try another PDF file.</p>
+                    <p className="text-red-500 dark:text-red-500 text-xs mt-1">Tip: after one successful extraction, download the saved test file so you can reuse it without AI quota.</p>
                   </div>
                 </div>
               )}
@@ -276,7 +284,7 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
                 ) : (
                   <>
                     <p>• Bilingual (Hindi + English) papers are supported</p>
-                    <p>• Supports UPCNET, NEET, and similar nursing/medical entrance papers</p>
+                    <p>• Supports exam, practice set, nursing, medical, and entrance papers</p>
                     <p>• Answer keys embedded in the PDF will also be detected if present</p>
                   </>
                 )}
@@ -302,18 +310,18 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
                 </div>
               </div>
               <div className="text-center">
-                <p className="font-semibold text-gray-700 dark:text-gray-200">
+                <p className="font-semibold text-gray-700 dark:text-zinc-200">
                   {stage === "reading"
                     ? "Reading PDF..."
                     : isWithAnswers
                     ? "AI Extracting Questions & Answer Key..."
                     : "AI Extracting Questions..."}
                 </p>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{progress}</p>
-                {fileName && <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{fileName}</p>}
+                <p className="text-sm text-gray-500 dark:text-zinc-400 mt-1">{progress}</p>
+                {fileName && <p className="text-xs text-gray-400 dark:text-zinc-500 mt-1">{fileName}</p>}
               </div>
               {stage === "extracting" && (
-                <div className={`${isWithAnswers ? "bg-violet-50 dark:bg-violet-950 border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-400" : "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"} border rounded-lg px-4 py-2 text-xs text-center max-w-xs`}>
+                <div className={`${isWithAnswers ? "bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-300" : "bg-amber-50 dark:bg-amber-950 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400"} border rounded-lg px-4 py-2 text-xs text-center max-w-xs`}>
                   {isWithAnswers
                     ? "AI is reading questions and carefully matching each one with the answer key — this takes 15–25 seconds"
                     : "AI is carefully reading every question — this takes 10–20 seconds for accuracy"}
@@ -326,15 +334,15 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
             <div className="space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-3">
                 <div>
-                  <p className="font-bold text-gray-800 dark:text-gray-100 text-lg">{questions.length} questions extracted!</p>
-                  <p className="text-gray-500 dark:text-gray-400 text-sm">from: {fileName}</p>
+                  <p className="font-bold text-gray-800 dark:text-zinc-100 text-lg">{questions.length} questions extracted!</p>
+                  <p className="text-gray-500 dark:text-zinc-400 text-sm">from: {fileName}</p>
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   <div className="bg-green-100 dark:bg-green-900/50 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-400 text-xs font-bold px-3 py-1.5 rounded-full">
                     ✓ Ready to use
                   </div>
                   {isWithAnswers && (
-                    <div className={`${answersFound === questions.length ? "bg-violet-100 dark:bg-violet-900/50 border-violet-300 dark:border-violet-700 text-violet-700 dark:text-violet-400" : "bg-amber-100 dark:bg-amber-900/50 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400"} text-xs font-bold px-3 py-1.5 rounded-full border`}>
+                    <div className={`${answersFound === questions.length ? "bg-zinc-100 dark:bg-zinc-900/50 border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-300" : "bg-amber-100 dark:bg-amber-900/50 border-amber-300 dark:border-amber-700 text-amber-700 dark:text-amber-400"} text-xs font-bold px-3 py-1.5 rounded-full border`}>
                       {answersFound}/{questions.length} answers matched
                     </div>
                   )}
@@ -348,17 +356,17 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">Exam Title</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-zinc-200 mb-1">Exam Title</label>
                 <input
                   type="text"
                   value={examTitle}
                   onChange={(e) => setExamTitle(e.target.value)}
-                  className="w-full border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full border border-gray-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-800"
                 />
               </div>
 
-              <div className="bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Subject Breakdown</p>
+              <div className="bg-gray-50 dark:bg-black border border-gray-200 dark:border-zinc-800 rounded-lg p-4">
+                <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-3">Subject Breakdown</p>
                 <div className="flex flex-wrap gap-2">
                   {Object.entries(subjectCounts).map(([subj, count]) => (
                     <span key={subj} className={`px-3 py-1 rounded-full text-xs font-semibold border ${getSubjectColor(subj)}`}>
@@ -369,21 +377,26 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
               </div>
 
               <div>
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-2">Preview (first 3 questions)</p>
+                <p className="text-xs font-semibold text-gray-500 dark:text-zinc-400 uppercase tracking-wide mb-2">Preview (first 3 questions)</p>
                 <div className="space-y-3 max-h-64 overflow-y-auto pr-1">
                   {questions.slice(0, 3).map((q) => (
-                    <div key={q.id} className="bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-3 text-sm">
+                    <div key={q.id} className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg p-3 text-sm">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <p className="font-medium text-gray-800 dark:text-gray-100">Q{q.id}. {q.question}</p>
+                        <p className="font-medium text-gray-800 dark:text-zinc-100">Q{q.id}. {q.question}</p>
                         {isWithAnswers && (
-                          <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${q.correctAnswer >= 0 ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400" : "bg-gray-100 dark:bg-gray-600 text-gray-400"}`}>
-                            {q.correctAnswer >= 0 ? `Ans: ${String.fromCharCode(65 + q.correctAnswer)}` : "No key"}
+                          <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${q.correctAnswer >= 0 || q.numericAnswer ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400" : "bg-gray-100 dark:bg-zinc-800 text-gray-400"}`}>
+                            {q.correctAnswer >= 0 ? `Ans: ${String.fromCharCode(65 + q.correctAnswer)}` : q.numericAnswer ? `Ans: ${q.numericAnswer}` : "No key"}
                           </span>
                         )}
                       </div>
+                      {q.questionType === "integer" && (
+                        <div className="text-xs px-2 py-1 rounded bg-cyan-50 dark:bg-cyan-900/30 text-cyan-700 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-700">
+                          Numerical answer question
+                        </div>
+                      )}
                       <div className="grid grid-cols-2 gap-1">
                         {q.options.map((opt, i) => (
-                          <div key={i} className={`text-xs px-2 py-1 rounded ${q.correctAnswer === i ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 font-semibold ring-1 ring-green-400 dark:ring-green-700" : "bg-gray-50 dark:bg-gray-600 text-gray-600 dark:text-gray-300"}`}>
+                          <div key={i} className={`text-xs px-2 py-1 rounded ${q.correctAnswer === i ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 font-semibold ring-1 ring-green-400 dark:ring-green-700" : "bg-gray-50 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300"}`}>
                             {String.fromCharCode(65 + i)}. {opt}
                           </div>
                         ))}
@@ -393,12 +406,18 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
                 </div>
               </div>
 
-              <div className="flex gap-3 pt-2">
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
                 <button
                   onClick={() => { setStage("idle"); setQuestions([]); setAnswersFound(0); }}
-                  className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300 font-semibold py-2.5 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                  className="flex-1 border border-gray-300 dark:border-zinc-700 text-gray-600 dark:text-zinc-300 font-semibold py-2.5 rounded-lg text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                 >
                   Upload Different PDF
+                </button>
+                <button
+                  onClick={() => downloadSavedTest(examTitle, questions)}
+                  className="flex-1 border border-cyan-300 dark:border-cyan-700 text-cyan-700 dark:text-cyan-300 font-semibold py-2.5 rounded-lg text-sm hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors"
+                >
+                  Download Test File
                 </button>
                 <button
                   onClick={() => onQuestionsReady(questions, examTitle)}
