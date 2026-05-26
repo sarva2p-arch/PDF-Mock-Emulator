@@ -1,7 +1,7 @@
 services:
   - type: web
     name: pdf-mock-emulator
-    env: node
+    runtime: node
     plan: free
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm run build
     startCommand: pnpm run start
@@ -11,6 +11,4 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: GROQ_API_KEY
-        sync: false
-      - key: OPENAI_API_KEY
         sync: false

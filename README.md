@@ -86,5 +86,6 @@ Set these environment variables on your hosting provider:
 NODE_ENV=production
 GEMINI_API_KEY=
 GROQ_API_KEY=
-OPENAI_API_KEY=
 ```
+
+`OPENAI_API_KEY` is optional. Add it only if you have a paid OpenAI key.
