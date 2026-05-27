@@ -15,6 +15,7 @@ interface ReviewExtractedTestProps {
 interface QuestionIssue {
   severity: "warning" | "error";
   message: string;
+  suggestion?: string;
 }
 
 const emptyQuestion = (id: number): ExamQuestion => ({
@@ -31,65 +32,190 @@ function isIntegerQuestion(question: ExamQuestion) {
   return question.questionType === "integer" || question.options.length === 0;
 }
 
+function compactText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function stripOptionLabel(value: string) {
+  return compactText(value).replace(/^\(?[A-Da-d]\)?[\s.)-]+/, "");
+}
+
+function normalizeForCompare(value: string) {
+  return compactText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
 function normalizeQuestion(question: ExamQuestion, index: number): ExamQuestion {
   const integer = isIntegerQuestion(question);
   return {
     id: index + 1,
-    subject: question.subject.trim() || "General",
+    subject: compactText(question.subject) || "General",
     questionType: integer ? "integer" : "mcq",
-    question: question.question.trim(),
-    options: integer ? [] : [...question.options, "", "", "", ""].slice(0, 4).map((option) => option.trim()),
+    question: compactText(question.question),
+    options: integer ? [] : [...question.options, "", "", "", ""].slice(0, 4).map(stripOptionLabel),
     correctAnswer: integer ? -1 : question.correctAnswer >= 0 && question.correctAnswer < 4 ? question.correctAnswer : -1,
-    numericAnswer: integer ? (question.numericAnswer ?? "").trim() : "",
+    numericAnswer: integer ? compactText(question.numericAnswer ?? "") : "",
   };
 }
 
-function getIssues(question: ExamQuestion): QuestionIssue[] {
+function prepareEditableQuestion(question: ExamQuestion, index: number): ExamQuestion {
+  const normalized = normalizeQuestion(question, index);
+  return {
+    ...normalized,
+    id: Number.isFinite(question.id) && question.id > 0 ? question.id : index + 1,
+  };
+}
+
+function autoFixQuestion(question: ExamQuestion, index: number): ExamQuestion {
+  const fixed = normalizeQuestion(question, index);
+  return {
+    ...fixed,
+    id: index + 1,
+  };
+}
+
+function hasSuspiciousOcr(value: string) {
+  return (
+    value.includes("�") ||
+    value.toLowerCase().includes("cid:") ||
+    /[|{}[\]\\]{3,}/.test(value) ||
+    /\s{4,}/.test(value)
+  );
+}
+
+function getDuplicateOptionIndexes(options: string[]) {
+  const seen = new Map<string, number>();
+  const duplicates = new Set<number>();
+
+  options.forEach((option, index) => {
+    const key = normalizeForCompare(option);
+    if (!key) return;
+    if (seen.has(key)) {
+      duplicates.add(seen.get(key)!);
+      duplicates.add(index);
+      return;
+    }
+    seen.set(key, index);
+  });
+
+  return duplicates;
+}
+
+function getIssues(question: ExamQuestion, duplicateNumber: boolean): QuestionIssue[] {
   const issues: QuestionIssue[] = [];
   const integer = isIntegerQuestion(question);
 
+  if (duplicateNumber) {
+    issues.push({
+      severity: "warning",
+      message: `Duplicate extracted question number ${question.id}`,
+      suggestion: "Use Apply Safe Auto Fixes to renumber questions sequentially, then confirm the order.",
+    });
+  }
+
   if (!question.question.trim()) {
-    issues.push({ severity: "error", message: "Question text is empty" });
+    issues.push({ severity: "error", message: "Question text is empty", suggestion: "Check the original PDF and type the missing question manually." });
+  } else if (question.question.trim().length < 8) {
+    issues.push({
+      severity: "warning",
+      message: "Question text looks very short",
+      suggestion: "Check whether OCR missed part of the question.",
+    });
+  }
+
+  if (hasSuspiciousOcr(question.question)) {
+    issues.push({
+      severity: "warning",
+      message: "Question text has suspicious OCR characters",
+      suggestion: "Use Auto Fix for spacing cleanup, then compare with the PDF.",
+    });
   }
 
   if (!question.subject.trim()) {
-    issues.push({ severity: "warning", message: "Subject is empty" });
+    issues.push({ severity: "warning", message: "Subject is empty", suggestion: "Auto Fix will set the subject to General." });
   }
 
   if (integer) {
     if (!(question.numericAnswer ?? "").trim()) {
-      issues.push({ severity: "warning", message: "Numerical answer is missing" });
+      issues.push({
+        severity: "warning",
+        message: "Numerical answer is missing",
+        suggestion: "Enter the final numeric answer if an answer key is available.",
+      });
     }
     return issues;
   }
 
   if (question.options.length !== 4) {
-    issues.push({ severity: "error", message: "MCQ must have exactly 4 options" });
+    issues.push({
+      severity: "error",
+      message: "MCQ must have exactly 4 options",
+      suggestion: "Auto Fix will create 4 option boxes, but missing option text must be checked manually.",
+    });
   }
 
-  [...question.options, "", "", "", ""].slice(0, 4).forEach((option, index) => {
+  const safeOptions = [...question.options, "", "", "", ""].slice(0, 4);
+  const duplicateOptions = getDuplicateOptionIndexes(safeOptions);
+
+  safeOptions.forEach((option, index) => {
     if (!option.trim()) {
-      issues.push({ severity: "error", message: `Option ${String.fromCharCode(65 + index)} is empty` });
+      issues.push({
+        severity: "error",
+        message: `Option ${String.fromCharCode(65 + index)} is empty`,
+        suggestion: "Check the original PDF. AI cannot safely invent a missing option.",
+      });
+    } else if (duplicateOptions.has(index)) {
+      issues.push({
+        severity: "warning",
+        message: `Option ${String.fromCharCode(65 + index)} duplicates another option`,
+        suggestion: "Compare options with the PDF because duplicate options often indicate extraction noise.",
+      });
+    } else if (hasSuspiciousOcr(option)) {
+      issues.push({
+        severity: "warning",
+        message: `Option ${String.fromCharCode(65 + index)} has suspicious OCR characters`,
+        suggestion: "Use Auto Fix for spacing cleanup, then compare with the PDF.",
+      });
     }
   });
 
   if (question.correctAnswer < 0) {
-    issues.push({ severity: "warning", message: "Correct answer is not set" });
+    issues.push({
+      severity: "warning",
+      message: "Correct answer is not set",
+      suggestion: "Select A, B, C, or D if the answer key is available.",
+    });
   } else if (question.correctAnswer > 3) {
-    issues.push({ severity: "error", message: "Correct answer is invalid" });
+    issues.push({
+      severity: "error",
+      message: "Correct answer is invalid",
+      suggestion: "Auto Fix will reset the answer to Unknown.",
+    });
+  } else if (!safeOptions[question.correctAnswer]?.trim()) {
+    issues.push({
+      severity: "error",
+      message: "Correct answer points to an empty option",
+      suggestion: "Fill that option or choose the correct answer again.",
+    });
   }
 
   return issues;
 }
 
 function summarizeIssues(questions: ExamQuestion[], expectedCount: number) {
-  const perQuestion = questions.map(getIssues);
+  const numberCounts = new Map<number, number>();
+  questions.forEach((question) => numberCounts.set(question.id, (numberCounts.get(question.id) ?? 0) + 1));
+  const duplicateNumbers = [...numberCounts.entries()].filter(([, count]) => count > 1).map(([number]) => number);
+  const missingNumbers =
+    expectedCount > 0
+      ? Array.from({ length: expectedCount }, (_, index) => index + 1).filter((number) => !numberCounts.has(number))
+      : [];
+  const perQuestion = questions.map((question) => getIssues(question, duplicateNumbers.includes(question.id)));
   const errorCount = perQuestion.reduce((sum, issues) => sum + issues.filter((issue) => issue.severity === "error").length, 0);
   const warningCount = perQuestion.reduce((sum, issues) => sum + issues.filter((issue) => issue.severity === "warning").length, 0);
   const needsReview = perQuestion.filter((issues) => issues.length > 0).length;
   const missingCount = Math.max(0, expectedCount - questions.length);
 
-  return { perQuestion, errorCount, warningCount, needsReview, missingCount };
+  return { perQuestion, errorCount, warningCount, needsReview, missingCount, missingNumbers, duplicateNumbers };
 }
 
 export default function ReviewExtractedTest({
@@ -101,20 +227,21 @@ export default function ReviewExtractedTest({
   onToggleDark,
 }: ReviewExtractedTestProps) {
   const [title, setTitle] = useState(examTitle || "Mock Test");
-  const [items, setItems] = useState<ExamQuestion[]>(() => questions.map(normalizeQuestion));
+  const [items, setItems] = useState<ExamQuestion[]>(() => questions.map(prepareEditableQuestion));
   const [expectedCount, setExpectedCount] = useState(String(questions.length));
   const [expanded, setExpanded] = useState<number | null>(0);
 
-  const normalized = useMemo(() => items.map(normalizeQuestion), [items]);
+  const reviewItems = useMemo(() => items.map(prepareEditableQuestion), [items]);
+  const normalized = useMemo(() => reviewItems.map(normalizeQuestion), [reviewItems]);
   const expected = Math.max(0, Number(expectedCount) || 0);
-  const summary = useMemo(() => summarizeIssues(normalized, expected), [normalized, expected]);
+  const summary = useMemo(() => summarizeIssues(reviewItems, expected), [reviewItems, expected]);
 
   const updateQuestion = (index: number, updater: (question: ExamQuestion) => ExamQuestion) => {
-    setItems((prev) => prev.map((question, i) => (i === index ? normalizeQuestion(updater(question), i) : question)));
+    setItems((prev) => prev.map((question, i) => (i === index ? prepareEditableQuestion(updater(question), i) : question)));
   };
 
   const removeQuestion = (index: number) => {
-    setItems((prev) => prev.filter((_, i) => i !== index).map(normalizeQuestion));
+    setItems((prev) => prev.filter((_, i) => i !== index).map(prepareEditableQuestion));
     setExpanded((current) => {
       if (current === index) return null;
       if (current !== null && current > index) return current - 1;
@@ -123,8 +250,19 @@ export default function ReviewExtractedTest({
   };
 
   const addQuestion = () => {
-    setItems((prev) => [...prev, emptyQuestion(prev.length + 1)].map(normalizeQuestion));
+    const nextId = Math.max(0, ...items.map((question) => question.id)) + 1;
+    setItems((prev) => [...prev, emptyQuestion(nextId)].map(prepareEditableQuestion));
     setExpanded(items.length);
+  };
+
+  const applySafeFixes = () => {
+    const ok = window.confirm("Apply safe fixes? This trims text, cleans option labels, resets invalid answers, and renumbers questions in order.");
+    if (!ok) return;
+    setItems((prev) => prev.map(autoFixQuestion));
+  };
+
+  const applyQuestionFix = (index: number) => {
+    updateQuestion(index, (question) => autoFixQuestion(question, index));
   };
 
   const confirmReview = () => {
@@ -222,9 +360,25 @@ export default function ReviewExtractedTest({
                 Expected count is higher than extracted count. Check the PDF around the missing question numbers, then add them manually if needed.
               </p>
             )}
+            {summary.missingNumbers.length > 0 && summary.missingNumbers.length <= 20 && (
+              <p className="mt-2 text-sm">
+                Missing extracted numbers: {summary.missingNumbers.join(", ")}
+              </p>
+            )}
+            {summary.duplicateNumbers.length > 0 && (
+              <p className="mt-2 text-sm">
+                Duplicate extracted numbers: {summary.duplicateNumbers.join(", ")}
+              </p>
+            )}
           </div>
 
           <div className="flex flex-wrap gap-2">
+            <button
+              onClick={applySafeFixes}
+              className="rounded-lg border border-emerald-500/50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+            >
+              Apply Safe Auto Fixes
+            </button>
             <button
               onClick={addQuestion}
               className="rounded-lg border border-cyan-500/50 px-3 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/40"
@@ -240,7 +394,7 @@ export default function ReviewExtractedTest({
           </div>
 
           <div className="space-y-3">
-            {normalized.map((question, index) => {
+            {reviewItems.map((question, index) => {
               const issues = summary.perQuestion[index] ?? [];
               const integer = isIntegerQuestion(question);
               const open = expanded === index;
@@ -261,6 +415,11 @@ export default function ReviewExtractedTest({
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-md bg-zinc-950 px-2 py-1 text-xs font-bold text-white">Q{index + 1}</span>
+                        {question.id !== index + 1 && (
+                          <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-bold text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400">
+                            PDF #{question.id}
+                          </span>
+                        )}
                         <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{question.subject || "General"}</span>
                         <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${integer ? "bg-cyan-100 text-cyan-700 dark:bg-cyan-950 dark:text-cyan-300" : "bg-zinc-100 text-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"}`}>
                           {integer ? "Numerical" : "MCQ"}
@@ -283,7 +442,10 @@ export default function ReviewExtractedTest({
                       {issues.length > 0 && (
                         <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-300">
                           {issues.map((issue) => (
-                            <div key={issue.message}>- {issue.message}</div>
+                            <div key={issue.message} className="mb-2 last:mb-0">
+                              <div>- {issue.message}</div>
+                              {issue.suggestion && <div className="ml-3 text-xs opacity-80">Suggestion: {issue.suggestion}</div>}
+                            </div>
                           ))}
                         </div>
                       )}
@@ -375,7 +537,13 @@ export default function ReviewExtractedTest({
                         </div>
                       )}
 
-                      <div className="mt-4 flex justify-end">
+                      <div className="mt-4 flex flex-wrap justify-end gap-2">
+                        <button
+                          onClick={() => applyQuestionFix(index)}
+                          className="rounded-lg border border-emerald-400/50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                        >
+                          Auto Fix This
+                        </button>
                         <button
                           onClick={() => removeQuestion(index)}
                           className="rounded-lg border border-red-400/50 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
