@@ -4,6 +4,7 @@ import Exam, { type ExamAnswer, type ExamQuestion } from "@/pages/Exam";
 import Results from "@/pages/Results";
 import PdfUpload, { type ExtractedQuestion } from "@/pages/PdfUpload";
 import PdfUploadSplit from "@/pages/PdfUploadSplit";
+import ReviewExtractedTest from "@/pages/ReviewExtractedTest";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { readSavedTest } from "@/lib/savedTests";
 import BetaBadge from "@/components/BetaBadge";
@@ -13,6 +14,7 @@ type Screen =
   | "pdf-upload"
   | "pdf-upload-with-answers"
   | "pdf-upload-split"
+  | "review-extraction"
   | "pdf-registration"
   | "exam"
   | "results";
@@ -544,7 +546,7 @@ export default function App() {
   const handlePdfReady = (questions: ExtractedQuestion[], examTitle: string) => {
     setPendingQuestions(questions);
     setPendingTitle(examTitle);
-    setScreen("pdf-registration");
+    setScreen("review-extraction");
   };
 
   const handleImportSavedTest = async (file?: File) => {
@@ -554,7 +556,7 @@ export default function App() {
       const saved = await readSavedTest(file);
       setPendingQuestions(saved.questions);
       setPendingTitle(saved.examTitle);
-      setScreen("pdf-registration");
+      setScreen("review-extraction");
     } catch (err) {
       window.alert(err instanceof Error ? err.message : "Could not import this saved test file.");
     } finally {
@@ -573,6 +575,12 @@ export default function App() {
       timeTaken: 0,
     });
     setScreen("exam");
+  };
+
+  const handleReviewConfirm = (questions: ExamQuestion[], examTitle: string) => {
+    setPendingQuestions(questions);
+    setPendingTitle(examTitle);
+    setScreen("pdf-registration");
   };
 
   const handleSubmit = (answers: ExamAnswer[], timeTaken: number) => {
@@ -761,6 +769,19 @@ export default function App() {
       <PdfUploadSplit
         onQuestionsReady={handlePdfReady}
         onBack={() => setScreen("home")}
+        isDark={isDark}
+        onToggleDark={toggleDark}
+      />
+    );
+  }
+
+  if (screen === "review-extraction") {
+    return (
+      <ReviewExtractedTest
+        examTitle={pendingTitle}
+        questions={pendingQuestions}
+        onBack={() => setScreen("home")}
+        onConfirm={handleReviewConfirm}
         isDark={isDark}
         onToggleDark={toggleDark}
       />

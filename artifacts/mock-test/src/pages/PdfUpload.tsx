@@ -423,7 +423,7 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
                   onClick={() => onQuestionsReady(questions, examTitle)}
                   className={`flex-1 ${btnBg} text-white font-semibold py-2.5 rounded-lg text-sm transition-colors shadow-sm`}
                 >
-                  Start Mock Test →
+                  Review &amp; Start
                 </button>
               </div>
             </div>

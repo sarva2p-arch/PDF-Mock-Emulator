@@ -329,7 +329,7 @@ export default function PdfUploadSplit({ onQuestionsReady, onBack, isDark, onTog
                       onClick={() => onQuestionsReady(questions, examTitle)}
                       className="flex-1 bg-zinc-950 hover:bg-black text-white font-semibold py-2.5 rounded-lg text-sm transition-colors shadow-sm"
                     >
-                      Start Mock Test →
+                      Review &amp; Start
                     </button>
                   </div>
                 </div>
