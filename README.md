@@ -90,7 +90,7 @@ GROQ_API_KEY=
 
 `OPENAI_API_KEY` is optional. Add it only if you have a paid OpenAI key.
 
-Optional extra fallback providers:
+Extra fallback providers. Any key you add here joins the same automatic one-by-one fallback chain:
 
 ```env
 MISTRAL_API_KEY=

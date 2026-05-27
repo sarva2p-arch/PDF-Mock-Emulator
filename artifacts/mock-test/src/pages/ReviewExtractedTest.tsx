@@ -230,6 +230,7 @@ export default function ReviewExtractedTest({
   const [items, setItems] = useState<ExamQuestion[]>(() => questions.map(prepareEditableQuestion));
   const [expectedCount, setExpectedCount] = useState(String(questions.length));
   const [expanded, setExpanded] = useState<number | null>(0);
+  const [fixNotice, setFixNotice] = useState("");
 
   const reviewItems = useMemo(() => items.map(prepareEditableQuestion), [items]);
   const normalized = useMemo(() => reviewItems.map(normalizeQuestion), [reviewItems]);
@@ -256,13 +257,17 @@ export default function ReviewExtractedTest({
   };
 
   const applySafeFixes = () => {
-    const ok = window.confirm("Apply safe fixes? This trims text, cleans option labels, resets invalid answers, and renumbers questions in order.");
-    if (!ok) return;
     setItems((prev) => prev.map(autoFixQuestion));
+    setExpanded(null);
+    setFixNotice("Safe fixes applied: text cleaned, options normalized, invalid answers reset, and questions renumbered.");
+    window.setTimeout(() => setFixNotice(""), 3500);
   };
 
   const applyQuestionFix = (index: number) => {
-    updateQuestion(index, (question) => autoFixQuestion(question, index));
+    setItems((prev) => prev.map((question, i) => (i === index ? autoFixQuestion(question, i) : question)));
+    setExpanded(index);
+    setFixNotice(`Safe fix applied to question ${index + 1}.`);
+    window.setTimeout(() => setFixNotice(""), 2500);
   };
 
   const confirmReview = () => {
@@ -374,24 +379,33 @@ export default function ReviewExtractedTest({
 
           <div className="flex flex-wrap gap-2">
             <button
+              type="button"
               onClick={applySafeFixes}
               className="rounded-lg border border-emerald-500/50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
             >
               Apply Safe Auto Fixes
             </button>
             <button
+              type="button"
               onClick={addQuestion}
               className="rounded-lg border border-cyan-500/50 px-3 py-2 text-sm font-semibold text-cyan-700 hover:bg-cyan-50 dark:text-cyan-300 dark:hover:bg-cyan-950/40"
             >
               Add Question
             </button>
             <button
+              type="button"
               onClick={() => downloadSavedTest(title, normalized)}
               className="rounded-lg border border-zinc-300 px-3 py-2 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
             >
               Download Reviewed Test
             </button>
           </div>
+
+          {fixNotice && (
+            <div className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+              {fixNotice}
+            </div>
+          )}
 
           <div className="space-y-3">
             {reviewItems.map((question, index) => {
@@ -539,12 +553,14 @@ export default function ReviewExtractedTest({
 
                       <div className="mt-4 flex flex-wrap justify-end gap-2">
                         <button
+                          type="button"
                           onClick={() => applyQuestionFix(index)}
                           className="rounded-lg border border-emerald-400/50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
                         >
                           Auto Fix This
                         </button>
                         <button
+                          type="button"
                           onClick={() => removeQuestion(index)}
                           className="rounded-lg border border-red-400/50 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950/40"
                         >
@@ -560,12 +576,14 @@ export default function ReviewExtractedTest({
 
           <div className="sticky bottom-3 flex flex-col gap-3 rounded-xl border border-zinc-800 bg-black p-3 shadow-2xl sm:flex-row">
             <button
+              type="button"
               onClick={onBack}
               className="flex-1 rounded-lg border border-zinc-700 px-4 py-3 text-sm font-semibold text-zinc-300 hover:bg-zinc-900"
             >
               Back to Home
             </button>
             <button
+              type="button"
               onClick={confirmReview}
               className="flex-1 rounded-lg bg-emerald-600 px-4 py-3 text-sm font-black text-white hover:bg-emerald-700"
             >

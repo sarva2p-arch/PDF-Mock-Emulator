@@ -190,6 +190,10 @@ export function getProvidersStatus(): ProviderStatus[] {
   }));
 }
 
+export function getFallbackOrder(): ProviderStatus[] {
+  return getProvidersStatus();
+}
+
 export function getActiveProvider(): ProviderStatus | null {
   const statuses = getProvidersStatus();
   return statuses.find((s) => s.available) ?? null;

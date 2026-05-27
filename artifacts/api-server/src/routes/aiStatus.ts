@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getProvidersStatus, getActiveProvider } from "../services/aiProvider.js";
+import { getProvidersStatus, getActiveProvider, getFallbackOrder } from "../services/aiProvider.js";
 
 const router = Router();
 
@@ -7,10 +7,13 @@ router.get("/ai-status", (_req, res) => {
   const providers = getProvidersStatus();
   const active = getActiveProvider();
   const availableCount = providers.filter((p) => p.available).length;
+  const fallbackOrder = getFallbackOrder();
 
   res.json({
     providers,
     activeProvider: active,
+    fallbackOrder,
+    configuredFallbackOrder: fallbackOrder.filter((p) => p.available),
     availableCount,
     healthy: availableCount > 0,
     setupInstructions: {

@@ -77,6 +77,8 @@ interface ProviderStatus {
 interface AiStatus {
   providers: ProviderStatus[];
   activeProvider: ProviderStatus | null;
+  fallbackOrder?: ProviderStatus[];
+  configuredFallbackOrder?: ProviderStatus[];
   availableCount: number;
   healthy: boolean;
   setupInstructions: Record<string, string>;
@@ -405,6 +407,10 @@ function AiStatusModal({ onClose }: { onClose: () => void }) {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const fallbackOrder = status?.fallbackOrder ?? status?.providers ?? [];
+  const configuredFallbackOrder =
+    status?.configuredFallbackOrder ?? fallbackOrder.filter((provider) => provider.available);
+
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
@@ -448,13 +454,43 @@ function AiStatusModal({ onClose }: { onClose: () => void }) {
                     {pinned === "auto" && <div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />}
                   </div>
                   <div>
-                    <div className={`font-semibold text-sm ${pinned === "auto" ? "text-zinc-800 dark:text-zinc-300" : "text-gray-700 dark:text-zinc-200"}`}>Auto — try best available</div>
-                    <div className="text-xs text-gray-400 mt-0.5">System picks automatically, falls back if one fails</div>
+                    <div className={`font-semibold text-sm ${pinned === "auto" ? "text-zinc-800 dark:text-zinc-300" : "text-gray-700 dark:text-zinc-200"}`}>Auto - try best available</div>
+                    <div className="text-xs text-gray-400 mt-0.5">System tries connected providers in order, then falls back if one fails</div>
                   </div>
                   {pinned === "auto" && (
                     <span className="ml-auto text-xs bg-zinc-900 text-white px-2 py-0.5 rounded-full font-bold">Selected</span>
                   )}
                 </button>
+              </div>
+
+              <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-3 dark:border-cyan-800 dark:bg-cyan-950/40">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-bold uppercase tracking-wide text-cyan-800 dark:text-cyan-300">Auto fallback chain</p>
+                    <p className="mt-0.5 text-xs text-cyan-700 dark:text-cyan-400">
+                      {configuredFallbackOrder.length > 0
+                        ? `${configuredFallbackOrder.length} connected provider${configuredFallbackOrder.length > 1 ? "s" : ""} will be tried one by one.`
+                        : "No provider key is connected yet."}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-cyan-900 px-2.5 py-1 text-xs font-bold text-white">
+                    {pinned === "auto" ? "Auto selected" : "Pinned first"}
+                  </span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {fallbackOrder.map((provider, index) => (
+                    <span
+                      key={provider.id}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${
+                        provider.available
+                          ? "border-emerald-300 bg-emerald-100 text-emerald-800 dark:border-emerald-700 dark:bg-emerald-950 dark:text-emerald-300"
+                          : "border-zinc-200 bg-white text-zinc-500 dark:border-zinc-800 dark:bg-black dark:text-zinc-500"
+                      }`}
+                    >
+                      {index + 1}. {provider.name.replace(" (Free)", "")} {provider.available ? "ready" : "key needed"}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               <div>
@@ -493,7 +529,7 @@ function AiStatusModal({ onClose }: { onClose: () => void }) {
                         <span className="ml-auto text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-bold shrink-0">Pinned</span>
                       )}
                       {!p.available && (
-                        <span className="ml-auto text-xs text-gray-300 font-medium shrink-0">Not set up</span>
+                        <span className="ml-auto text-xs text-gray-300 font-medium shrink-0">Key needed</span>
                       )}
                     </button>
                   ))}
@@ -508,18 +544,18 @@ function AiStatusModal({ onClose }: { onClose: () => void }) {
 
               <div className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4">
                 <p className="text-xs font-bold text-zinc-900 dark:text-zinc-400 uppercase tracking-wide mb-2">API Key Status</p>
-                <p className="text-xs text-zinc-800 dark:text-zinc-300 mb-3">These providers are checked from your <code className="bg-zinc-100 dark:bg-zinc-950 px-1 rounded">.env</code> file. Connected ones are ready to use.</p>
+                <p className="text-xs text-zinc-800 dark:text-zinc-300 mb-3">Connected providers are automatically included in the fallback chain. Missing keys are skipped until you add them.</p>
                 <div className="space-y-2">
                   {status.providers.map((p) => (
                     <div key={p.id} className="bg-white dark:bg-zinc-900 rounded-lg p-2.5 border border-zinc-200 dark:border-zinc-700">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs font-bold text-zinc-900 dark:text-zinc-300">{p.name}</span>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${p.available ? "bg-emerald-100 text-emerald-700" : "bg-zinc-100 text-zinc-500"}`}>
-                          {p.available ? "Connected" : "Optional"}
+                          {p.available ? "Connected" : "Key needed"}
                         </span>
                       </div>
                       <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">
-                        {p.available ? "API key detected and ready." : "Not needed now. Add later only if you want this backup provider."}
+                        {p.available ? "API key detected and ready for automatic fallback." : p.note}
                       </p>
                     </div>
                   ))}
