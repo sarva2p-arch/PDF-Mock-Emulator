@@ -1,6 +1,6 @@
 import OpenAI from "openai";
 
-export type ProviderId = "custom-openai" | "groq" | "gemini";
+export type ProviderId = "custom-openai" | "gemini" | "mistral" | "openrouter" | "groq";
 
 export interface ProviderStatus {
   id: ProviderId;
@@ -25,6 +25,40 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function shouldRetryProviderError(message: string) {
   return /429|500|502|503|504|rate limit|temporarily|high demand|unavailable/i.test(message);
+}
+
+async function completeOpenAiCompatible({
+  apiKey,
+  baseURL,
+  model,
+  system,
+  user,
+  maxTokens,
+  maxTokensCap,
+  jsonMode = true,
+  defaultHeaders,
+}: {
+  apiKey: string;
+  baseURL: string;
+  model: string;
+  system: string;
+  user: string;
+  maxTokens: number;
+  maxTokensCap: number;
+  jsonMode?: boolean;
+  defaultHeaders?: Record<string, string>;
+}) {
+  const client = new OpenAI({ apiKey, baseURL, defaultHeaders });
+  const res = await client.chat.completions.create({
+    model,
+    max_tokens: Math.min(maxTokens, maxTokensCap),
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
+  });
+  return res.choices[0]?.message?.content ?? "{}";
 }
 
 const PROVIDERS: Provider[] = [
@@ -84,6 +118,47 @@ const PROVIDERS: Provider[] = [
     },
   },
   {
+    id: "mistral",
+    name: "Mistral AI (Free/Eval)",
+    model: process.env.MISTRAL_MODEL || "mistral-small-latest",
+    type: "free",
+    note: "Set MISTRAL_API_KEY - free/evaluation tier for prototyping",
+    available: () => !!process.env.MISTRAL_API_KEY,
+    complete: async (system, user, maxTokens) =>
+      completeOpenAiCompatible({
+        apiKey: process.env.MISTRAL_API_KEY!,
+        baseURL: "https://api.mistral.ai/v1",
+        model: process.env.MISTRAL_MODEL || "mistral-small-latest",
+        system,
+        user,
+        maxTokens,
+        maxTokensCap: 8192,
+      }),
+  },
+  {
+    id: "openrouter",
+    name: "OpenRouter Free Model",
+    model: process.env.OPENROUTER_MODEL || "Set OPENROUTER_MODEL",
+    type: "free",
+    note: "Set OPENROUTER_API_KEY and OPENROUTER_MODEL to any current :free model",
+    available: () => !!process.env.OPENROUTER_API_KEY && !!process.env.OPENROUTER_MODEL,
+    complete: async (system, user, maxTokens) =>
+      completeOpenAiCompatible({
+        apiKey: process.env.OPENROUTER_API_KEY!,
+        baseURL: "https://openrouter.ai/api/v1",
+        model: process.env.OPENROUTER_MODEL!,
+        system,
+        user,
+        maxTokens,
+        maxTokensCap: 6000,
+        jsonMode: false,
+        defaultHeaders: {
+          "HTTP-Referer": process.env.PUBLIC_APP_URL || "https://pdf-mock-emulator.onrender.com",
+          "X-Title": "Sarva Build PDF Mock Test",
+        },
+      }),
+  },
+  {
     id: "groq",
     name: "Groq - Llama 3.3 (Free)",
     model: "llama-3.3-70b-versatile",
@@ -91,20 +166,15 @@ const PROVIDERS: Provider[] = [
     note: "Set GROQ_API_KEY - free account at console.groq.com, very fast for smaller PDFs",
     available: () => !!process.env.GROQ_API_KEY,
     complete: async (system, user, maxTokens) => {
-      const client = new OpenAI({
-        apiKey: process.env.GROQ_API_KEY,
+      return completeOpenAiCompatible({
+        apiKey: process.env.GROQ_API_KEY!,
         baseURL: "https://api.groq.com/openai/v1",
-      });
-      const res = await client.chat.completions.create({
         model: "llama-3.3-70b-versatile",
-        max_tokens: Math.min(maxTokens, 4096),
-        messages: [
-          { role: "system", content: system },
-          { role: "user", content: user },
-        ],
-        response_format: { type: "json_object" },
+        system,
+        user,
+        maxTokens,
+        maxTokensCap: 4096,
       });
-      return res.choices[0]?.message?.content ?? "{}";
     },
   },
 ];
@@ -135,7 +205,7 @@ export async function aiComplete(
 
   if (available.length === 0) {
     throw new Error(
-      "No AI provider is configured. Set at least one: OPENAI_API_KEY, GROQ_API_KEY, or GEMINI_API_KEY in your .env file or environment."
+      "No AI provider is configured. Set at least one: GEMINI_API_KEY, GROQ_API_KEY, MISTRAL_API_KEY, OPENROUTER_API_KEY + OPENROUTER_MODEL, or OPENAI_API_KEY."
     );
   }
 

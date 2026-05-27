@@ -89,3 +89,15 @@ GROQ_API_KEY=
 ```
 
 `OPENAI_API_KEY` is optional. Add it only if you have a paid OpenAI key.
+
+Optional extra fallback providers:
+
+```env
+MISTRAL_API_KEY=
+MISTRAL_MODEL=mistral-small-latest
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=
+PUBLIC_APP_URL=https://pdf-mock-emulator.onrender.com
+```
+
+For OpenRouter, set `OPENROUTER_MODEL` to a current free model from OpenRouter. Free OpenRouter model IDs usually end with `:free`.
