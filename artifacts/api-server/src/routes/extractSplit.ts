@@ -10,7 +10,10 @@ const SYSTEM_EXTRACT_QUESTIONS = `You are an expert exam question extractor. Ext
 Rules:
 - Extract ALL questions preserving their original question numbers exactly as they appear in the PDF
 - MCQ questions must have exactly 4 options (A, B, C, D)
+- Match-the-column/List-I List-II questions are MCQs. Preserve the List-I/List-II lines inside the question text and keep the four answer-combination options as A/B/C/D options.
 - Integer/numerical answer questions may have NO options. For those, set questionType to "integer" and options to []
+- Preserve meaningful line breaks for tables, lists, assertion-reason blocks, and match-column questions. Do not flatten List-I/List-II into unreadable text.
+- If a question refers to a graph, diagram, image, or figure, keep the question and add a short note in the question text such as "[Figure/diagram referenced in PDF - verify manually]" because raw text may not include image details.
 - Remove bilingual duplicates — keep English text only when both Hindi and English appear for the same content
 - Clean up OCR artifacts, garbled characters, and formatting noise
 - Ignore headers, footers, page numbers, watermarks, instructions
@@ -203,7 +206,7 @@ function dedupeQuestions(questions: QuestionDraft[]) {
 }
 
 async function extractQuestionsWithFallback(questionText: string, providerPreference?: string) {
-  const fullPrompt = `Extract all questions from this question paper, including MCQ and integer/numerical answer questions. Preserve original question numbers. Clean up bilingual/OCR issues:\n\n${questionText.slice(0, 26000)}`;
+  const fullPrompt = `Extract all questions from this question paper, including MCQ, match-the-column/List-I List-II, assertion-reason, and integer/numerical answer questions. Preserve original question numbers and meaningful line breaks. Clean up bilingual/OCR issues:\n\n${questionText.slice(0, 26000)}`;
 
   try {
     const result = await aiComplete(SYSTEM_EXTRACT_QUESTIONS, fullPrompt, 8192, providerPreference);
@@ -222,7 +225,7 @@ async function extractQuestionsWithFallback(questionText: string, providerPrefer
     const chunkErrors: string[] = [];
 
     for (let i = 0; i < chunks.length; i += 1) {
-      const chunkPrompt = `Extract every complete question visible in chunk ${i + 1} of ${chunks.length}, including MCQ and integer/numerical answer questions. Preserve original question numbers. Ignore repeated overlap text if it creates duplicates.\n\n${chunks[i]}`;
+      const chunkPrompt = `Extract every complete question visible in chunk ${i + 1} of ${chunks.length}, including MCQ, match-the-column/List-I List-II, assertion-reason, and integer/numerical answer questions. Preserve original question numbers and meaningful line breaks. Ignore repeated overlap text if it creates duplicates.\n\n${chunks[i]}`;
 
       try {
         const result = await aiComplete(SYSTEM_EXTRACT_QUESTIONS, chunkPrompt, 3500, providerPreference);

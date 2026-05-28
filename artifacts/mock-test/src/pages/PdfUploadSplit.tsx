@@ -1,13 +1,8 @@
 import { useState, useRef } from "react";
-import * as pdfjsLib from "pdfjs-dist";
 import { friendlyExtractionError } from "@/lib/extractionErrors";
 import { downloadSavedTest } from "@/lib/savedTests";
+import { extractStructuredTextFromPdf } from "@/lib/pdfText";
 import BetaBadge from "@/components/BetaBadge";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.mjs",
-  import.meta.url
-).toString();
 
 export interface ExtractedQuestion {
   id: number;
@@ -55,19 +50,6 @@ export default function PdfUploadSplit({ onQuestionsReady, onBack, isDark, onTog
   const qInputRef = useRef<HTMLInputElement>(null);
   const aInputRef = useRef<HTMLInputElement>(null);
 
-  const extractText = async (file: File, onPage: (n: number, total: number) => void): Promise<string> => {
-    const buf = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
-    let text = "";
-    for (let p = 1; p <= pdf.numPages; p++) {
-      onPage(p, pdf.numPages);
-      const page = await pdf.getPage(p);
-      const content = await page.getTextContent();
-      text += content.items.map((i: unknown) => ((i as { str?: string }).str ?? "")).join(" ") + "\n";
-    }
-    return text;
-  };
-
   const handleQuestionFile = async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".pdf")) { setError("Question paper must be a PDF."); return; }
     if (file.size > 20 * 1024 * 1024) { setError("Question paper PDF too large (max 20MB)."); return; }
@@ -75,7 +57,7 @@ export default function PdfUploadSplit({ onQuestionsReady, onBack, isDark, onTog
     setStage("reading");
     setProgress("Reading question paper...");
     try {
-      const text = await extractText(file, (p, t) => setProgress(`Reading question paper: page ${p} of ${t}...`));
+      const text = await extractStructuredTextFromPdf(file, (p, t) => setProgress(`Reading question paper: page ${p} of ${t}...`));
       if (text.trim().length < 50) { setError("Could not extract text from question paper PDF. It may be image-based."); setStage("error"); return; }
       setQuestionPdf({ file, name: file.name, text, ready: true });
       setStage("idle");
@@ -92,7 +74,7 @@ export default function PdfUploadSplit({ onQuestionsReady, onBack, isDark, onTog
     setStage("reading");
     setProgress("Reading answer key...");
     try {
-      const text = await extractText(file, (p, t) => setProgress(`Reading answer key: page ${p} of ${t}...`));
+      const text = await extractStructuredTextFromPdf(file, (p, t) => setProgress(`Reading answer key: page ${p} of ${t}...`));
       if (text.trim().length < 10) { setError("Could not extract text from answer key PDF. It may be image-based."); setStage("error"); return; }
       setAnswerPdf({ file, name: file.name, text, ready: true });
       setStage("idle");
@@ -293,7 +275,7 @@ export default function PdfUploadSplit({ onQuestionsReady, onBack, isDark, onTog
                       {questions.slice(0, 3).map((q) => (
                         <div key={q.id} className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg p-3 text-sm">
                           <div className="flex items-start justify-between gap-2 mb-2">
-                            <p className="font-medium text-gray-800 dark:text-zinc-100">Q{q.id}. {q.question}</p>
+                            <p className="whitespace-pre-line font-medium text-gray-800 dark:text-zinc-100">Q{q.id}. {q.question}</p>
                             <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${q.correctAnswer >= 0 || q.numericAnswer ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400" : "bg-gray-100 dark:bg-zinc-800 text-gray-400"}`}>
                               {q.correctAnswer >= 0 ? `Ans: ${String.fromCharCode(65 + q.correctAnswer)}` : q.numericAnswer ? `Ans: ${q.numericAnswer}` : "No key"}
                             </span>
@@ -306,7 +288,7 @@ export default function PdfUploadSplit({ onQuestionsReady, onBack, isDark, onTog
                           <div className="grid grid-cols-2 gap-1">
                             {q.options.map((opt, i) => (
                               <div key={i} className={`text-xs px-2 py-1 rounded ${q.correctAnswer === i ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 font-semibold ring-1 ring-green-400 dark:ring-green-700" : "bg-gray-50 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300"}`}>
-                                {String.fromCharCode(65 + i)}. {opt}
+                                <span className="whitespace-pre-line">{String.fromCharCode(65 + i)}. {opt}</span>
                               </div>
                             ))}
                           </div>

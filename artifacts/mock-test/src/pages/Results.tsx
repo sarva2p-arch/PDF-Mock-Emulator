@@ -258,7 +258,7 @@ export default function Results({ candidateName, rollNumber, examTitle, question
                           {isCorrect ? "✓" : isSkipped ? "–" : "✗"}
                         </span>
                         <div className="flex-1">
-                          <p className="text-gray-800 dark:text-zinc-100 text-sm font-medium mb-2">Q{globalIdx + 1}. {q.question}</p>
+                          <p className="whitespace-pre-line text-gray-800 dark:text-zinc-100 text-sm font-medium mb-2">Q{globalIdx + 1}. {q.question}</p>
                           {integerQuestion && (
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-2">
                               <div className={`text-xs px-2.5 py-1.5 rounded-lg border ${isCorrect ? "bg-green-100 dark:bg-green-900/50 border-green-400 dark:border-green-700 text-green-800 dark:text-green-300 font-semibold" : !isSkipped ? "bg-red-100 dark:bg-red-900/50 border-red-400 dark:border-red-700 text-red-800 dark:text-red-300" : "bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-300"}`}>
@@ -281,7 +281,7 @@ export default function Results({ candidateName, rollNumber, examTitle, question
                                     : "bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-700 text-gray-600 dark:text-zinc-300"
                                 }`}
                               >
-                                {String.fromCharCode(65 + oIdx)}. {opt}
+                                <span className="whitespace-pre-line">{String.fromCharCode(65 + oIdx)}. {opt}</span>
                                 {hasKey && oIdx === q.correctAnswer && <span className="ml-1 text-green-600 dark:text-green-400">✓</span>}
                                 {oIdx === userAnswer && userAnswer !== q.correctAnswer && <span className="ml-1 text-red-600 dark:text-red-400">✗</span>}
                               </div>

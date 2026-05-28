@@ -289,7 +289,7 @@ export default function Exam({ candidateName, rollNumber, duration, examTitle, q
               </div>
 
               <div className="px-4 sm:px-5 py-4 sm:py-5 border-b border-gray-100 dark:border-zinc-800">
-                <p className="text-gray-800 dark:text-zinc-100 font-medium leading-relaxed text-base">{currentQuestion.question}</p>
+                <p className="whitespace-pre-line text-gray-800 dark:text-zinc-100 font-medium leading-relaxed text-base">{currentQuestion.question}</p>
               </div>
 
               <div className="px-4 sm:px-5 py-4 space-y-3">
@@ -332,7 +332,7 @@ export default function Exam({ candidateName, rollNumber, duration, examTitle, q
                         <span className={`font-bold shrink-0 ${selectedOption === optIdx ? "text-zinc-700" : "text-gray-500 dark:text-zinc-400"}`}>
                           {String.fromCharCode(65 + optIdx)}.
                         </span>
-                        <span>{option}</span>
+                        <span className="whitespace-pre-line">{option}</span>
                       </span>
                     </label>
                   ))

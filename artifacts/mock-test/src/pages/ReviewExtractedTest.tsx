@@ -36,8 +36,19 @@ function compactText(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function cleanMultilineText(value: string) {
+  return value
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => compactText(line))
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+}
+
 function stripOptionLabel(value: string) {
-  return compactText(value).replace(/^\(?[A-Da-d]\)?[\s.)-]+/, "");
+  return cleanMultilineText(value).replace(/^\(?[A-Da-d]\)?[\s.)-]+/, "");
 }
 
 function normalizeForCompare(value: string) {
@@ -50,7 +61,7 @@ function normalizeQuestion(question: ExamQuestion, index: number): ExamQuestion 
     id: index + 1,
     subject: compactText(question.subject) || "General",
     questionType: integer ? "integer" : "mcq",
-    question: compactText(question.question),
+    question: cleanMultilineText(question.question),
     options: integer ? [] : [...question.options, "", "", "", ""].slice(0, 4).map(stripOptionLabel),
     correctAnswer: integer ? -1 : question.correctAnswer >= 0 && question.correctAnswer < 4 ? question.correctAnswer : -1,
     numericAnswer: integer ? compactText(question.numericAnswer ?? "") : "",
@@ -80,6 +91,10 @@ function hasSuspiciousOcr(value: string) {
     /[|{}[\]\\]{3,}/.test(value) ||
     /\s{4,}/.test(value)
   );
+}
+
+function hasDiagramReference(value: string) {
+  return /\b(figure|diagram|graph|chart|image|shown below|given below|following figure|following diagram|see the figure|आकृति|चित्र|ग्राफ)\b/i.test(value);
 }
 
 function getDuplicateOptionIndexes(options: string[]) {
@@ -127,6 +142,14 @@ function getIssues(question: ExamQuestion, duplicateNumber: boolean): QuestionIs
       severity: "warning",
       message: "Question text has suspicious OCR characters",
       suggestion: "Use Auto Fix for spacing cleanup, then compare with the PDF.",
+    });
+  }
+
+  if (hasDiagramReference(question.question)) {
+    issues.push({
+      severity: "warning",
+      message: "Question may depend on a graph/diagram",
+      suggestion: "PDF text extraction cannot read image details. Compare this question with the original PDF and add missing figure details manually.",
     });
   }
 
@@ -423,6 +446,7 @@ export default function ReviewExtractedTest({
               return (
                 <div key={`${question.id}-${index}`} className={`overflow-hidden rounded-xl border bg-white dark:bg-black ${statusClass}`}>
                   <button
+                    type="button"
                     onClick={() => setExpanded(open ? null : index)}
                     className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                   >
@@ -446,7 +470,7 @@ export default function ReviewExtractedTest({
                           </span>
                         )}
                       </div>
-                      <p className="mt-2 truncate text-sm text-zinc-600 dark:text-zinc-400">{question.question || "Empty question text"}</p>
+                      <p className="mt-2 line-clamp-2 whitespace-pre-line text-sm text-zinc-600 dark:text-zinc-400">{question.question || "Empty question text"}</p>
                     </div>
                     <span className="shrink-0 text-sm font-bold text-zinc-400">{open ? "Close" : "Edit"}</span>
                   </button>
@@ -499,7 +523,7 @@ export default function ReviewExtractedTest({
                         <textarea
                           value={question.question}
                           onChange={(event) => updateQuestion(index, (q) => ({ ...q, question: event.target.value }))}
-                          rows={3}
+                          rows={Math.min(10, Math.max(4, question.question.split("\n").length + 1))}
                           className="w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
                         />
                       </div>

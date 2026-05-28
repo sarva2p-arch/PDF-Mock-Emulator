@@ -10,7 +10,10 @@ const SYSTEM_QUESTIONS_ONLY = `You are an expert exam question extractor. Your t
 CRITICAL RULES — follow exactly:
 - Extract ALL questions — do not skip, truncate, or stop partway through. If there are 30 questions, return all 30.
 - MCQ questions must have exactly 4 options (A, B, C, D).
+- Match-the-column/List-I List-II questions are MCQs. Preserve the List-I/List-II lines inside the question text and keep the four answer-combination options as A/B/C/D options.
 - Integer/numerical answer questions may have NO options. For those, set questionType to "integer", options to [], correctAnswer to -1, and numericAnswer to the numeric answer if present.
+- Preserve meaningful line breaks for tables, lists, assertion-reason blocks, and match-column questions. Do not flatten List-I/List-II into unreadable text.
+- If a question refers to a graph, diagram, image, or figure, keep the question and add a short note in the question text such as "[Figure/diagram referenced in PDF - verify manually]" because raw text may not include image details.
 - Count question numbers as you go to ensure none are missed. Questions are usually numbered 1, 2, 3... — follow the sequence.
 - If an MCQ answer key is present, extract the correct answer for each question (A=0, B=1, C=2, D=3). Otherwise set correctAnswer to -1.
 - Remove bilingual duplicates — if the same content appears in both Hindi and English, keep only the English version.
@@ -40,7 +43,10 @@ const SYSTEM_WITH_ANSWERS = `You are an expert exam question and answer key extr
 CRITICAL RULES — follow exactly:
 - Extract ALL MCQ questions without exception. If there are 30 questions numbered 1-30, return all 30.
 - MCQ questions must have exactly 4 options (A, B, C, D).
+- Match-the-column/List-I List-II questions are MCQs. Preserve the List-I/List-II lines inside the question text and keep the four answer-combination options as A/B/C/D options.
 - Integer/numerical answer questions may have NO options. For those, set questionType to "integer", options to [], correctAnswer to -1, and numericAnswer to the numeric answer.
+- Preserve meaningful line breaks for tables, lists, assertion-reason blocks, and match-column questions. Do not flatten List-I/List-II into unreadable text.
+- If a question refers to a graph, diagram, image, or figure, keep the question and add a short note in the question text such as "[Figure/diagram referenced in PDF - verify manually]" because raw text may not include image details.
 - Find the answer key section — it often appears as: "1-B 2-A 3-C..." or "1.(b) 2.(a)..." or a table. It may be at the end or in a separate section.
 - Match EVERY question number to its answer letter. This is the most important step.
 - Convert answer letters to index: A=0, B=1, C=2, D=3.
@@ -245,7 +251,7 @@ async function extractQuestionsResilient(
     const chunkErrors: string[] = [];
 
     for (let i = 0; i < chunks.length; i += 1) {
-      const chunkPrompt = `Extract every complete question visible in chunk ${i + 1} of ${chunks.length}, including MCQ and integer/numerical answer questions. Preserve original question numbers. Ignore repeated overlap text if it creates duplicates.\n\n${chunks[i]}`;
+      const chunkPrompt = `Extract every complete question visible in chunk ${i + 1} of ${chunks.length}, including MCQ, match-the-column/List-I List-II, assertion-reason, and integer/numerical answer questions. Preserve original question numbers and meaningful line breaks. Ignore repeated overlap text if it creates duplicates.\n\n${chunks[i]}`;
 
       try {
         const result = await aiComplete(SYSTEM_QUESTIONS_ONLY, chunkPrompt, 3500, chunkProvider);
@@ -288,8 +294,8 @@ router.post("/extract-questions", upload.none(), async (req, res) => {
 
     const userPromptPrefix =
       mode === "with-answers"
-        ? "Extract ALL MCQ and integer/numerical questions AND match every one to its answer from the key in this PDF. Find the answer key section carefully — check the end of the document and any answer tables. Make sure you return every single question. The PDF text may contain OCR artifacts or bilingual content:"
-        : "Extract ALL MCQ and integer/numerical questions from this exam PDF. Do not stop early — find and return every question from start to finish. The text may contain OCR artifacts or bilingual content (Hindi/English):";
+        ? "Extract ALL MCQ, match-the-column/List-I List-II, assertion-reason, and integer/numerical questions AND match every one to its answer from the key in this PDF. Find the answer key section carefully - check the end of the document and any answer tables. Preserve meaningful line breaks. Make sure you return every single question. The PDF text may contain OCR artifacts or bilingual content:"
+        : "Extract ALL MCQ, match-the-column/List-I List-II, assertion-reason, and integer/numerical questions from this exam PDF. Do not stop early - find and return every question from start to finish. Preserve meaningful line breaks. The text may contain OCR artifacts or bilingual content (Hindi/English):";
 
     const userPrompt = `${userPromptPrefix}\n\n${pdfText.slice(0, textLimit)}`;
 

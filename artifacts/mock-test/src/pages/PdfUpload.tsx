@@ -1,13 +1,8 @@
 import { useState, useRef, useCallback } from "react";
-import * as pdfjsLib from "pdfjs-dist";
 import { friendlyExtractionError } from "@/lib/extractionErrors";
 import { downloadSavedTest } from "@/lib/savedTests";
+import { extractStructuredTextFromPdf } from "@/lib/pdfText";
 import BetaBadge from "@/components/BetaBadge";
-
-pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.mjs",
-  import.meta.url
-).toString();
 
 export interface ExtractedQuestion {
   id: number;
@@ -44,25 +39,6 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
 
   const isWithAnswers = mode === "with-answers";
 
-  const extractTextFromPdf = async (file: File): Promise<string> => {
-    const arrayBuffer = await file.arrayBuffer();
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = "";
-    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-      setProgress(`Reading page ${pageNum} of ${pdf.numPages}...`);
-      const page = await pdf.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items
-        .map((item: unknown) => {
-          const i = item as { str?: string };
-          return i.str ?? "";
-        })
-        .join(" ");
-      fullText += pageText + "\n";
-    }
-    return fullText;
-  };
-
   const processFile = useCallback(async (file: File) => {
     if (!file.name.toLowerCase().endsWith(".pdf")) {
       setError("Please upload a PDF file.");
@@ -81,7 +57,9 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
     try {
       setStage("reading");
       setProgress("Opening PDF...");
-      const text = await extractTextFromPdf(file);
+      const text = await extractStructuredTextFromPdf(file, (pageNum, totalPages) => {
+        setProgress(`Reading page ${pageNum} of ${totalPages}...`);
+      });
 
       if (text.trim().length < 50) {
         setError("Could not extract text from this PDF. It may be a scanned/image-only PDF.");
@@ -382,7 +360,7 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
                   {questions.slice(0, 3).map((q) => (
                     <div key={q.id} className="bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-700 rounded-lg p-3 text-sm">
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <p className="font-medium text-gray-800 dark:text-zinc-100">Q{q.id}. {q.question}</p>
+                        <p className="whitespace-pre-line font-medium text-gray-800 dark:text-zinc-100">Q{q.id}. {q.question}</p>
                         {isWithAnswers && (
                           <span className={`shrink-0 text-xs font-bold px-2 py-0.5 rounded-full ${q.correctAnswer >= 0 || q.numericAnswer ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400" : "bg-gray-100 dark:bg-zinc-800 text-gray-400"}`}>
                             {q.correctAnswer >= 0 ? `Ans: ${String.fromCharCode(65 + q.correctAnswer)}` : q.numericAnswer ? `Ans: ${q.numericAnswer}` : "No key"}
@@ -397,7 +375,7 @@ export default function PdfUpload({ mode, onQuestionsReady, onBack, isDark, onTo
                       <div className="grid grid-cols-2 gap-1">
                         {q.options.map((opt, i) => (
                           <div key={i} className={`text-xs px-2 py-1 rounded ${q.correctAnswer === i ? "bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-400 font-semibold ring-1 ring-green-400 dark:ring-green-700" : "bg-gray-50 dark:bg-zinc-800 text-gray-600 dark:text-zinc-300"}`}>
-                            {String.fromCharCode(65 + i)}. {opt}
+                            <span className="whitespace-pre-line">{String.fromCharCode(65 + i)}. {opt}</span>
                           </div>
                         ))}
                       </div>
